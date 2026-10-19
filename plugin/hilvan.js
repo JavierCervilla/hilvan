@@ -406,10 +406,8 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
     );
   }
 
-  const vista = ({ value, field }) =>
-    conf(field).formato
-      ? h("div", { dangerouslySetInnerHTML: { __html: aHtml(value) } })
-      : h("div", { style: { whiteSpace: "pre-wrap" } }, value ?? "");
+  // la vista previa del campo suelto (las webs suelen tener la suya): el texto tal cual, también el Markdown
+  const vista = ({ value }) => h("div", { style: { whiteSpace: "pre-wrap" } }, value ?? "");
   const registra = CMS.registerFieldType ?? CMS.registerWidget;
   registra.call(CMS, opciones.nombre, Hilvan, vista);
   Hilvan.diferencias = diferencias; // para las pruebas
