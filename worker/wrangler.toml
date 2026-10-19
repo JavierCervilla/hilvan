@@ -1,0 +1,27 @@
+# Hilván · servidor. Una instancia por web: cambia name, REPO, ORIGENES y VOZ.
+# Secreto (no va aquí):  npx wrangler secret put ANTHROPIC_API_KEY
+name = "hilvan-whosnoor"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# el repositorio de la web: solo quien puede escribir en él recibe sugerencias
+REPO = "JavierCervilla/whosnoor"
+# desde dónde se puede llamar (el panel); admite *.subdominio
+ORIGENES = "https://whosnoor.com,https://*.whosnoor.pages.dev,http://localhost:4321,http://127.0.0.1:8790"
+MODELO = "claude-haiku-5-5"
+TOPE_DIARIO = "60"
+# la voz de la web: cómo escribe la persona del portfolio
+VOZ = """
+Es el portfolio de Noor, que trabaja en moda, comunicación y producción creativa en Madrid. Escribe en español, cercana
+y directa, en primera persona cuando habla de sí misma, con frases cortas. Mete términos de moda y nombres de labores en
+inglés (Visual Merchandising, Styling, PR…): se quedan en inglés. Nada de grandilocuencia ni de frases hechas de
+marketing.
+"""
+
+# contadores del tope diario y caché de permisos
+[[kv_namespaces]]
+binding = "HILVAN"
+id = "PENDIENTE_DE_CREAR"
+
+# en local, sin sesión ni clave:  npx wrangler dev --var MODO_LOCAL:1

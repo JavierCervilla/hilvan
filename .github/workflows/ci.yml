@@ -1,0 +1,82 @@
+# Hilván: pruebas, lint, seguridad (secretos, código y dependencias) y los revisores propios en cada push y PR.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  calidad:
+    name: Calidad · pruebas y lint
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Lint (gate anti-slop)
+        run: npm run lint
+      - name: Pruebas (servidor y campo)
+        run: npm test
+
+  # Seguridad: secretos en el historial, análisis del código y dependencias con fallos conocidos. Cualquier hallazgo
+  # para la CI.
+  seguridad:
+    name: Seguridad · secretos, código y dependencias
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Secretos en todo el historial (gitleaks)
+        run: |
+          GL_VER="8.21.2"
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GL_VER}/gitleaks_${GL_VER}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks git --redact --no-banner --exit-code 1 .
+      - name: Análisis del código (semgrep, reglas públicas de JavaScript y secretos)
+        run: |
+          pipx install semgrep==1.180.0
+          semgrep scan --config p/javascript --config p/secrets --error --metrics off plugin worker scripts
+      - name: Dependencias (npm audit)
+        run: npm audit --audit-level=high
+      - name: Dependencias (osv-scanner)
+        run: |
+          OSV_VER="1.9.2"
+          curl -sSfL -o /usr/local/bin/osv-scanner \
+            "https://github.com/google/osv-scanner/releases/download/v${OSV_VER}/osv-scanner_linux_amd64"
+          chmod +x /usr/local/bin/osv-scanner
+          osv-scanner --lockfile package-lock.json
+
+  # Revisores propios: caracteres invisibles que esconden código y comprobaciones de la CI apagadas a escondidas.
+  revisores:
+    name: Revisores · Unicode invisible y CI honesta
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Caracteres invisibles o de control
+        run: node scripts/unicode.mjs
+      - name: Ningún paso de la CI puede fallar en silencio
+        run: node scripts/ci-honesto.mjs

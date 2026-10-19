@@ -1,0 +1,21 @@
+{
+  "name": "hilvan",
+  "version": "0.1.0",
+  "description": "Sugerencias de mejora con IA para los campos de texto de Sveltia CMS (campo + servidor en Cloudflare Workers).",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "dev": "cd worker && npx wrangler dev --var MODO_LOCAL:1 --port 8787",
+    "deploy": "cd worker && npx wrangler deploy",
+    "lint": "eslint ."
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.13.0",
+    "eslint-plugin-import-x": "^4.17.1",
+    "eslint-plugin-sonarjs": "^4.2.2",
+    "globals": "^16.4.0"
+  }
+}
