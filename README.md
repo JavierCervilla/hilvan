@@ -46,6 +46,16 @@ Se llama así porque una sugerencia es eso: un hilván, la puntada provisional a
      pattern: ["^.{0,160}$", "Hasta 160 caracteres"]   # Sveltia sigue validando al guardar
    ```
 
+   Con **`formato: true`**, el campo es un editor con formato (se escribe viendo cómo queda): negrita, cursiva y
+   enlaces, con sus botones o con ⌘B, ⌘I y ⌘K; Intro empieza un párrafo y Mayús+Intro salta de línea; lo pegado entra
+   sin los estilos de donde venga. Se guarda en Markdown, lo justo: `**negrita**`, `*cursiva*`, `[texto](dirección)`,
+   los párrafos separados por una línea en blanco y el salto de línea, uno simple. La web lo pinta con su propio
+   conversor (o cualquiera de Markdown con los saltos simples como `<br>`), y la sugerencia conserva las marcas:
+
+   ```yaml
+   - { name: bio, label: Bio, widget: hilvan, multiline: true, formato: true }
+   ```
+
 Sin `data-endpoint`, sin sesión o si el servidor falla, el campo funciona como uno de texto normal.
 
 ## Desarrollo

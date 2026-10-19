@@ -124,6 +124,14 @@ test("el encargo: reglas, voz, contexto y el texto separado", () => {
   assert.match(m, /<texto>\nhola &lt;b&gt;\n<\/texto>/);
 });
 
+test("el encargo dice cómo viene el texto: una línea, párrafos o con formato (que conserve las marcas)", () => {
+  assert.match(mensaje({ texto: "x", campo: {} }), /Formato: una sola línea/);
+  assert.match(mensaje({ texto: "x", campo: { multilinea: true } }), /Formato: texto de uno o varios párrafos/);
+  const m = mensaje({ texto: "**x**", campo: { multilinea: true, formato: true } });
+  assert.match(m, /Formato: texto con formato, en Markdown/);
+  assert.match(m, /Conserva las marcas/);
+});
+
 test("limpia comillas que el original no tenía y saltos en campos de una línea", () => {
   assert.equal(limpia("«Hola, soy Noor»", "hola soy noor"), "Hola, soy Noor");
   assert.equal(limpia("«Una cita»", "«una cita»"), "«Una cita»");
