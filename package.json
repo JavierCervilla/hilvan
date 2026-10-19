@@ -1,6 +1,6 @@
 {
   "name": "hilvan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Sugerencias de mejora con IA para los campos de texto de Sveltia CMS (campo + servidor en Cloudflare Workers).",
   "type": "module",
   "private": true,

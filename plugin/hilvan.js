@@ -9,6 +9,7 @@
  *
  * Y en config.yml, en vez de `widget: string` o `widget: text`:
  *   - { name: entradilla, label: Entradilla, widget: hilvan, multiline: true, maxlength: 160, hint: "…" }
+ * Con `formato: true`, un editor con negrita, cursiva y enlaces que guarda Markdown (ver «el formato»).
  *
  * Sin data-endpoint, sin sesión o si el servidor falla, el campo sigue funcionando como un campo de texto normal.
  */
@@ -39,6 +40,10 @@
     caracteres: (n, max) => `${n} / ${max}`,
     sinServidor: "Sin conexión con el servidor de sugerencias.",
     anterior: "Has seguido escribiendo: la sugerencia es del texto anterior.",
+    negrita: "Negrita (⌘B)",
+    cursiva: "Cursiva (⌘I)",
+    enlace: "Enlace (⌘K)",
+    pideEnlace: "Dirección del enlace (vacía, lo quita):",
   };
 
   // ------------------------------------------------------------------------------------------- utilidades
@@ -91,6 +96,78 @@
     return out;
   }
 
+  // ------------------------------------------------------------------------------------------- el formato
+
+  // Con `formato: true` el campo es un editor con formato: se escribe viendo cómo queda, con negrita, cursiva y
+  // enlaces; Intro empieza un párrafo y Mayús+Intro salta de línea. Se guarda en Markdown, lo justo: **negrita**,
+  // *cursiva*, [texto](dirección), los párrafos separados por una línea en blanco y el salto de línea, uno simple.
+  const ESC_HTML = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
+  const escHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ESC_HTML[c]);
+  const URL_OK = /^(https?:|mailto:|tel:|\/|#)/i;
+  const GUARDA = ""; // lo escapado con \ se aparta mientras se buscan las marcas
+
+  // una línea de Markdown, a HTML (sin bloques)
+  function enLinea(md) {
+    const apartado = [];
+    let s = md.replace(/\\([\\*[\]])/g, (_, c) => `${GUARDA}${apartado.push(c) - 1}${GUARDA}`);
+    s = escHtml(s)
+      .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_, t, url) => (URL_OK.test(url) ? `<a href="${url}">${t}</a>` : t))
+      .replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>")
+      .replace(/\n/g, "<br>");
+    return s.replace(new RegExp(`${GUARDA}(\\d+)${GUARDA}`, "g"), (_, i) => escHtml(apartado[i]));
+  }
+  // Markdown → el HTML del editor: un <p> por párrafo
+  const aHtml = (md) =>
+    String(md ?? "")
+      .split(/\n[ \t]*\n/)
+      .map((p) => `<p>${enLinea(p) || "<br>"}</p>`)
+      .join("");
+
+  const BLOQUE = /^(P|DIV|H\d|LI|UL|OL|BLOCKQUOTE)$/;
+  const esNegrita = (n) =>
+    /^(B|STRONG)$/.test(n.nodeName) || Number(n.style?.fontWeight) >= 600 || n.style?.fontWeight === "bold";
+  const esCursiva = (n) => /^(I|EM)$/.test(n.nodeName) || n.style?.fontStyle === "italic";
+  // las marcas, pegadas al texto: « **hola** » y no «** hola **»
+  const envuelve = (marca, t) => {
+    const m = t.match(/^(\s*)([\s\S]*?)(\s*)$/);
+    return m[2] ? `${m[1]}${marca}${m[2]}${marca}${m[3]}` : t;
+  };
+  // un nodo del editor, a Markdown en línea
+  function nodoMd(n) {
+    // (el salto de Mayús+Intro llega como <br> o, con white-space: pre-wrap, como un \n en el texto)
+    if (n.nodeType === 3) return n.nodeValue.replace(/[^\S\n]+/g, " ").replace(/([\\*])/g, "\\$1");
+    if (n.nodeName === "BR") return "\n";
+    if (n.nodeType !== 1) return "";
+    let t = [...n.childNodes].map((x, i) => (i && BLOQUE.test(x.nodeName) ? "\n" : "") + nodoMd(x)).join("");
+    if (n.nodeName === "A") {
+      const url = n.getAttribute("href") ?? "";
+      return URL_OK.test(url) && t.trim() ? `[${t}](${url})` : t;
+    }
+    if (esCursiva(n)) t = envuelve("*", t);
+    if (esNegrita(n)) t = envuelve("**", t);
+    return t;
+  }
+  // el editor entero, a Markdown: cada bloque, un párrafo; lo suelto entre bloques, otro
+  function aMd(raiz) {
+    const parrafos = [];
+    let suelto = "";
+    for (const n of raiz.childNodes) {
+      if (!BLOQUE.test(n.nodeName)) {
+        suelto += nodoMd(n);
+        continue;
+      }
+      parrafos.push(suelto, nodoMd(n));
+      suelto = "";
+    }
+    parrafos.push(suelto);
+    return parrafos
+      .map((p) => p.replace(/ *\n */g, "\n").replace(/^\n+|\n+$/g, "").trim())
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   // ------------------------------------------------------------------------------------------- estilos
 
   const CSS = `
@@ -111,6 +188,13 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
 .hilvan-texto ins{text-decoration:none;background:color-mix(in srgb,var(--sui-success-foreground-color,#080) 18%,transparent);border-radius:2px}
 .hilvan-nota{margin:6px 0 0;font-size:12px;opacity:.8}
 .hilvan-error{font-size:13px;color:var(--sui-error-foreground-color,#b00)}
+.hilvan-herramientas{display:flex;gap:4px}
+.hilvan-herramientas button{min-width:32px;padding:4px 8px}
+.hilvan-herramientas button[aria-pressed=true]{background:var(--sui-primary-accent-color,#36c);border-color:transparent;color:var(--sui-primary-accent-color-inverted,#fff)}
+.hilvan-rico{min-height:96px;resize:vertical;overflow:auto;white-space:pre-wrap}
+.hilvan-rico p{margin:0}
+.hilvan-rico p+p{margin-top:.7em}
+.hilvan-rico a{color:var(--sui-primary-accent-color,#36c)}
 `;
   const estilos = () => {
     if (document.getElementById("hilvan-css")) return;
@@ -122,10 +206,107 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
 
   // ------------------------------------------------------------------------------------------- el campo
 
+  // el campo con formato: se edita en HTML y se guarda en Markdown a cada cambio
+  function Rico({ id, valor, onChange, caja, className }) {
+    const ultimo = useRef(null);
+    const [activos, setActivos] = useState({});
+    useEffect(() => {
+      document.execCommand?.("defaultParagraphSeparator", false, "p"); // Intro hace un <p>, no un <div>
+    }, []);
+    useEffect(() => {
+      if (!caja.current || valor === ultimo.current) return; // lo que acaba de escribir no se vuelve a pintar
+      caja.current.innerHTML = aHtml(valor);
+      ultimo.current = valor;
+    }, [valor]);
+    const cambia = () => {
+      ultimo.current = aMd(caja.current);
+      onChange(ultimo.current);
+    };
+    const mira = () =>
+      setActivos({ negrita: document.queryCommandState("bold"), cursiva: document.queryCommandState("italic") });
+    const orden = (cmd, arg) => {
+      caja.current.focus();
+      document.execCommand(cmd, false, arg);
+      cambia();
+      mira();
+    };
+    const enlace = () => {
+      const sel = window.getSelection();
+      const rango = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+      let a = sel.anchorNode;
+      while (a && a !== caja.current && a.nodeName !== "A") a = a.parentNode;
+      const url = window.prompt(T.pideEnlace, a?.nodeName === "A" ? a.getAttribute("href") : "https://");
+      if (url === null) return;
+      caja.current.focus();
+      if (rango) {
+        sel.removeAllRanges();
+        sel.addRange(rango);
+      }
+      const limpia = url.trim();
+      orden(limpia && limpia !== "https://" ? "createLink" : "unlink", limpia);
+    };
+    const teclas = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        enlace();
+      }
+    };
+    // lo pegado entra como texto, sin los estilos de donde venga
+    const pega = (e) => {
+      e.preventDefault();
+      document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+    };
+    // los botones actúan al pulsar, sin quitarle el foco (ni la selección) al texto
+    const boton = (etiqueta, letra, estilo, pulsado, accion) =>
+      h(
+        "button",
+        {
+          type: "button",
+          title: etiqueta,
+          "aria-label": etiqueta,
+          "aria-pressed": pulsado,
+          style: estilo,
+          onMouseDown: (e) => {
+            e.preventDefault();
+            accion();
+          },
+        },
+        letra,
+      );
+    return h(
+      "div",
+      { className: "hilvan" },
+      h(
+        "div",
+        { className: "hilvan-herramientas" },
+        boton(T.negrita, "B", { fontWeight: 700 }, Boolean(activos.negrita), () => orden("bold")),
+        boton(T.cursiva, "I", { fontStyle: "italic", fontFamily: "serif" }, Boolean(activos.cursiva), () =>
+          orden("italic"),
+        ),
+        boton(T.enlace, "↗", null, false, enlace),
+      ),
+      h("div", {
+        id,
+        ref: caja,
+        className: `hilvan-campo hilvan-rico ${className ?? ""}`,
+        contentEditable: true,
+        suppressContentEditableWarning: true,
+        role: "textbox",
+        "aria-multiline": "true",
+        onInput: cambia,
+        onKeyDown: teclas,
+        onKeyUp: mira,
+        onMouseUp: mira,
+        onPaste: pega,
+      }),
+    );
+  }
+
   function Hilvan(props) {
     const { value, onChange, forID, classNameWrapper } = props;
     const c = conf(props.field);
     const multilinea = c.multiline === true || c.multiline === "true";
+    const formato = c.formato === true || c.formato === "true";
     const max = Number(c.maxlength) || 0;
     const texto = typeof value === "string" ? value : "";
     const [estado, setEstado] = useState({ fase: "quieto" });
@@ -142,7 +323,7 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
           body: JSON.stringify({
             texto,
             pista,
-            campo: { nombre: c.name, etiqueta: c.label, ayuda: c.hint, max, multilinea },
+            campo: { nombre: c.name, etiqueta: c.label, ayuda: c.hint, max, multilinea, formato },
             contexto: contexto(),
           }),
         });
@@ -161,7 +342,9 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
       if (retocar) setTimeout(() => caja.current?.focus(), 0);
     };
 
-    const campo = h(multilinea ? "textarea" : "input", {
+    const campo = formato
+      ? h(Rico, { id: forID, valor: texto, onChange, caja, className: classNameWrapper })
+      : h(multilinea ? "textarea" : "input", {
       id: forID,
       ref: caja,
       className: `hilvan-campo ${classNameWrapper ?? ""}`,
@@ -223,8 +406,10 @@ textarea.hilvan-campo{min-height:96px;resize:vertical}
     );
   }
 
+  // la vista previa del campo suelto (las webs suelen tener la suya): el texto tal cual, también el Markdown
   const vista = ({ value }) => h("div", { style: { whiteSpace: "pre-wrap" } }, value ?? "");
   const registra = CMS.registerFieldType ?? CMS.registerWidget;
   registra.call(CMS, opciones.nombre, Hilvan, vista);
   Hilvan.diferencias = diferencias; // para las pruebas
+  Hilvan.formato = { aHtml, aMd };
 })();

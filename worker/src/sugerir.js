@@ -2,7 +2,7 @@
  * Hilván · servidor. La lógica, sin nada de Cloudflare dentro, para poder probarla con `node --test`: recibe la
  * petición, la configuración (env) y un `fetch` que se puede sustituir en las pruebas.
  *
- * POST /sugerir  { texto, campo: { nombre, etiqueta, ayuda, max, multilinea }, contexto: { coleccion, entrada }, pista }
+ * POST /sugerir  { texto, campo: { nombre, etiqueta, ayuda, max, multilinea, formato }, contexto: { coleccion, entrada }, pista }
  *   → 200 { sugerencia, igual, largo, restantes }   ·   4xx/5xx { error }
  *
  * Quién puede pedir: quien tenga sesión de GitHub en el panel y permiso de escritura en el repositorio de la web
@@ -32,6 +32,13 @@ export function sistema(voz) {
 
 const esc = (s) => String(s ?? "").replace(/[<>]/g, (c) => (c === "<" ? "&lt;" : "&gt;"));
 
+const formato = (campo) =>
+  campo.formato
+    ? "texto con formato, en Markdown: **negrita**, *cursiva*, [texto](dirección) y los párrafos separados por una línea en blanco. Conserva las marcas y las direcciones tal cual"
+    : campo.multilinea
+      ? "texto de uno o varios párrafos"
+      : "una sola línea";
+
 export function mensaje({ texto, campo = {}, contexto = {}, pista }) {
   const datos = [
     contexto.coleccion && `Sección del panel: ${contexto.coleccion}`,
@@ -39,7 +46,7 @@ export function mensaje({ texto, campo = {}, contexto = {}, pista }) {
     campo.etiqueta && `Campo: ${campo.etiqueta}`,
     campo.ayuda && `Para qué sirve: ${campo.ayuda}`,
     campo.max && `Límite: ${campo.max} caracteres como máximo`,
-    `Formato: ${campo.multilinea ? "texto de uno o varios párrafos" : "una sola línea"}`,
+    `Formato: ${formato(campo)}`,
   ].filter(Boolean);
   return [
     `<campo>\n${esc(datos.join("\n"))}\n</campo>`,
